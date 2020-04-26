@@ -12,7 +12,6 @@ struct image_info;
 struct bhi_vec_entry;
 struct mhi_timesync;
 struct mhi_buf_info;
-struct mhi_sfr_info;
 
 /**
  * enum MHI_CB - MHI callback
@@ -367,10 +366,6 @@ struct mhi_controller {
 	u64 local_timer_freq;
 	u64 remote_timer_freq;
 
-	/* subsytem failure reason retrieval feature */
-	struct mhi_sfr_info *mhi_sfr;
-	size_t sfr_len;
-
 	/* kernel log level */
 	enum MHI_DEBUG_LEVEL klog_lvl;
 
@@ -379,6 +374,9 @@ struct mhi_controller {
 
 	/* controller specific data */
 	bool power_down;
+	bool need_force_m3;
+	bool force_m3_done;
+	bool initiate_mhi_reset;
 	void *priv_data;
 	void *log_buf;
 	struct dentry *dentry;

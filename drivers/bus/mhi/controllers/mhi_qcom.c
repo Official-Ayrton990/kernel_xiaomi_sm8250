@@ -770,9 +770,7 @@ static struct mhi_controller *mhi_register_controller(struct pci_dev *pci_dev)
 	mhi_cntrl->iova_start = memblock_start_of_DRAM();
 	mhi_cntrl->iova_stop = memblock_end_of_DRAM();
 
-	/* setup host support for SFR retreival */
-	if (of_property_read_bool(of_node, "mhi,sfr-support"))
-		mhi_cntrl->sfr_len = MHI_MAX_SFR_LEN;
+	mhi_cntrl->need_force_m3 = true;
 
 	of_node = of_parse_phandle(mhi_cntrl->of_node, "qcom,iommu-group", 0);
 	if (of_node) {

@@ -1128,7 +1128,6 @@ static void mhi_process_cmd_completion(struct mhi_controller *mhi_cntrl,
 	struct mhi_tre *cmd_pkt;
 	struct mhi_chan *mhi_chan;
 	struct mhi_timesync *mhi_tsync;
-	struct mhi_sfr_info *sfr_info;
 	enum mhi_cmd_type type;
 	u32 chan;
 
@@ -1139,25 +1138,17 @@ static void mhi_process_cmd_completion(struct mhi_controller *mhi_cntrl,
 
 	type = MHI_TRE_GET_CMD_TYPE(cmd_pkt);
 
-	switch (type) {
-	case MHI_CMD_TYPE_TSYNC:
+	if (type == MHI_CMD_TYPE_TSYNC) {
 		mhi_tsync = mhi_cntrl->mhi_tsync;
 		mhi_tsync->ccs = MHI_TRE_GET_EV_CODE(tre);
 		complete(&mhi_tsync->completion);
-		break;
-	case MHI_CMD_TYPE_SFR_CFG:
-		sfr_info = mhi_cntrl->mhi_sfr;
-		sfr_info->ccs = MHI_TRE_GET_EV_CODE(tre);
-		complete(&sfr_info->completion);
-		break;
-	default:
-		chan = MHI_TRE_GET_CMD_CHID(cmd_pkt);
+	} else {
+        	chan = MHI_TRE_GET_CMD_CHID(cmd_pkt);
 		mhi_chan = &mhi_cntrl->mhi_chan[chan];
 		write_lock_bh(&mhi_chan->lock);
 		mhi_chan->ccs = MHI_TRE_GET_EV_CODE(tre);
 		complete(&mhi_chan->completion);
 		write_unlock_bh(&mhi_chan->lock);
-		break;
 	}
 
 	mhi_del_ring_element(mhi_cntrl, mhi_ring);
@@ -1451,6 +1442,9 @@ int mhi_process_bw_scale_ev_ring(struct mhi_controller *mhi_cntrl,
 		goto exit_no_lock;
 	}
 
+	if (mhi_cntrl->need_force_m3 && !mhi_cntrl->force_m3_done)
+		goto exit_no_lock;
+
 	ret = __mhi_device_get_sync(mhi_cntrl);
 	if (ret)
 		goto exit_no_lock;
@@ -1695,8 +1689,8 @@ int mhi_send_cmd(struct mhi_controller *mhi_cntrl,
 	struct mhi_tre *cmd_tre = NULL;
 	struct mhi_cmd *mhi_cmd = &mhi_cntrl->mhi_cmd[PRIMARY_CMD_RING];
 	struct mhi_ring *ring = &mhi_cmd->ring;
-	struct mhi_sfr_info *sfr_info;
-	int chan = 0;
+	int chan = 0, ret = 0;
+	bool cmd_db_not_set = false;
 
 	MHI_VERB("Entered, MHI pm_state:%s dev_state:%s ee:%s\n",
 		 to_mhi_pm_state_str(mhi_cntrl->pm_state),
@@ -1729,20 +1723,6 @@ int mhi_send_cmd(struct mhi_controller *mhi_cntrl,
 		cmd_tre->ptr = MHI_TRE_CMD_STOP_PTR;
 		cmd_tre->dword[0] = MHI_TRE_CMD_STOP_DWORD0;
 		cmd_tre->dword[1] = MHI_TRE_CMD_STOP_DWORD1(chan);
-		break;
-	case MHI_CMD_TIMSYNC_CFG:
-		cmd_tre->ptr = MHI_TRE_CMD_TSYNC_CFG_PTR;
-		cmd_tre->dword[0] = MHI_TRE_CMD_TSYNC_CFG_DWORD0;
-		cmd_tre->dword[1] = MHI_TRE_CMD_TSYNC_CFG_DWORD1
-			(mhi_cntrl->mhi_tsync->er_index);
-		break;
-	case MHI_CMD_SFR_CFG:
-		sfr_info = mhi_cntrl->mhi_sfr;
-		cmd_tre->ptr = MHI_TRE_CMD_SFR_CFG_PTR
-						(sfr_info->dma_addr);
-		cmd_tre->dword[0] = MHI_TRE_CMD_SFR_CFG_DWORD0
-						(sfr_info->len - 1);
-		cmd_tre->dword[1] = MHI_TRE_CMD_SFR_CFG_DWORD1;
 		break;
 	}
 
